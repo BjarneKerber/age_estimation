@@ -21,7 +21,7 @@ Technical validation was performed to ensure robustness, reproducibility and gen
 
 ## Exemplary model predictions and saliency maps generated using Score-CAM
 <p float="left">
-  <img src="https://github.com/BjarneKerber/age_estimation/blob/main/images/scc3.png" width="100" />
-  <img src="https://github.com/BjarneKerber/age_estimation/blob/main/images/scc2.png" width="100" /> 
-  <img src="https://github.com/BjarneKerber/age_estimation/blob/main/images/scc1.png" width="100" />
+  <img src="https://github.com/BjarneKerber/age_estimation/blob/main/images/scc3.png" width="300" />
+  <img src="https://github.com/BjarneKerber/age_estimation/blob/main/images/scc2.png" width="300" /> 
+  <img src="https://github.com/BjarneKerber/age_estimation/blob/main/images/scc1.png" width="300" />
 </p>
