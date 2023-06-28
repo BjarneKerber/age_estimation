@@ -18,6 +18,9 @@ from skimage.transform import resize
 import cv2
 from glob import glob
 import argparse
+from functools import partial
+from sys import exc_info
+import os
 
 
 def segment(arr, thresh=-600, background=-1024):
@@ -143,15 +146,15 @@ def get_dirs(work_dir, df, min_age, max_age):
     return dirs_to_draw
 
 
-def get_file(tpl, df):
+def get_file(dir, df):
     """Load image file from directory. Has to be rewritten according to project structure and database."""
-    study_dir = Path(tpl[1])
+    study_dir = Path(dir)
     pat_hash = study_dir.name
-    file_name = glob(str(study_dir) + "/**/CT.nii.gz", recursive=True)
+    file_name = glob(str(study_dir) + "/**/CT.nii.gz", recursive=True)[0]
 
     ret_loc = df[df['Subject ID'] == pat_hash].index[0].item()
     ret_age = int(df['age'][ret_loc].split("Y")[0])
-    img = nib.load(Path(study_dir / pat_hash / file_name))
+    img = nib.load(file_name)
 
     return pat_hash, file_name, ret_age, img
 
@@ -166,32 +169,33 @@ def chunky(lst, n):
         yield so_chunky
 
 
-def visualize(comb_arr, pat_hash, age, substring="0", special="0"):
+def visualize(comb_arr, pat_hash, age):
     # save visualization
     img_dir = Path("./images")
     fig, ax = plt.subplots()
     fig.suptitle(pat_hash)
     ax.set_title("MIP " + str(age) + "y")
     ax.imshow(np.rot90(comb_arr[0, 0, :, :]), cmap="bone", vmin=0, vmax=1)
-    out_file_name = pat_hash + "_" + substring + "_" + special + ".png"
+    out_file_name = pat_hash + ".png"
     out_file = img_dir / out_file_name
     plt.savefig(out_file, bbox_inches="tight")
     plt.close()
 
 
-def proc(tpl, df, thickness=10, augment=1, channels=1, shape=224):
+def proc(df, thickness, augment, channels, shape, tpl):
     """Preprocess one study"""
+    # print(df, thickness, augment, channels, shape, tpl)
     i = tpl[0]
     ct_min = -1024
 
     try:
-        pat_hash, file_name, ret_age, img = get_file(tpl, df)
+        pat_hash, file_name, ret_age, img = get_file(tpl[1], df)
 
         # read out original spacing and shape
         orig_spacing = np.array(img.header.get_zooms())
         orig_shape = img.header.get_data_shape()
 
-        # specify required shape for vgg16 and compute spacing needed
+        # specify required shape for network and compute spacing needed
         target_shape = (112, 112, 224)
         target_spacing = (orig_spacing[0] * (orig_shape[0] / target_shape[0]),
                           orig_spacing[1] * (orig_shape[1] / target_shape[1]),
@@ -210,11 +214,10 @@ def proc(tpl, df, thickness=10, augment=1, channels=1, shape=224):
 
         # segmentation
         res_arr = segment(res_arr)
-
         # compute maximum intensity projection
-        mip_sagittal = np.max(res_arr[(res_arr.shape[0] // 2 - thickness/2):(res_arr.shape[0] // 2 + thickness/2), :, :],
+        mip_sagittal = np.max(res_arr[(res_arr.shape[0] // 2 - thickness//2):(res_arr.shape[0] // 2 + thickness//2), :, :],
                               axis=0)
-        mip_coronar = np.max(res_arr[:, (res_arr.shape[1] // 2 - thickness/2):(res_arr.shape[1] // 2 + thickness/2), :],
+        mip_coronar = np.max(res_arr[:, (res_arr.shape[1] // 2 - thickness//2):(res_arr.shape[1] // 2 + thickness//2), :],
                              axis=1)
         mip_combined = np.concatenate((mip_coronar, mip_sagittal), axis=0)
         mip_combined = normalize(mip_combined, vmin=max(ct_min, np.min(mip_combined)), vmax=np.max(mip_combined))
@@ -227,17 +230,19 @@ def proc(tpl, df, thickness=10, augment=1, channels=1, shape=224):
         return i, comb_arr, pat_hash, ret_age
 
     except Exception as e:
-        print(e)
+        exc_type, exc_obj, exc_tb = exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
         return i, np.zeros((augment, channels, shape, shape)), 99999999999, 9999
 
 
 def run_preprocessing(work_dir, info_file, h5_file, min_age, max_age,
                       thickness, jobs, augment, channels, shape, save):
     """Run the preprocessing"""
-
+    work_dir = Path(work_dir)
     df = pd.read_csv(info_file)
 
-    dirs_to_draw = get_dirs(work_dir=work_dir, df=df, min_age=min_age, max_age=max_age)
+    dirs_to_draw = get_dirs(work_dir=work_dir, df=df, min_age=min_age, max_age=max_age)[:10]
 
     dir_nums = np.arange(0, len(dirs_to_draw))
     i_dirs = list(zip(dir_nums, dirs_to_draw))
@@ -256,12 +261,11 @@ def run_preprocessing(work_dir, info_file, h5_file, min_age, max_age,
         img_dir = Path("./images/")
         img_dir.mkdir(exist_ok=True)
 
-    for chunk in k_chunks[0:1]:
+    for chunk in k_chunks:
         chunk_i = chunk_i + 1
         print("chunk " + str(chunk_i) + " of " + str(num_chunks + 1))
-        results = Parallel(n_jobs=min(jobs, len(chunk)))(delayed(proc)(tpl=tpl, df=df, thickness=thickness)
-                                                         for tpl in chunk)
-
+        results = Parallel(n_jobs=min(jobs, len(chunk)))(delayed(partial(proc, df, thickness, augment, channels, shape))
+                                                                 (tpl) for tpl in chunk)
         for result in results:
             if not result[2] == 9999999999:
                 result_arr[result[0]:result[0]+augment, :, :, :] = result[1]
@@ -293,13 +297,13 @@ def main():
     parser.add_argument("--wor", help="Path to working directory", required=True)
     parser.add_argument("--inf", help="File with patient information", required=True)
     parser.add_argument("--h5f", help="destination h5-file", required=True)
-    parser.add_argument("--min", help="minimum age to include", default=20)
-    parser.add_argument("--max", help="maximum age to include", default=85)
-    parser.add_argument("--jbs", help="parallel jobs", default=10)
-    parser.add_argument("--thk", help="number of layers for MIP-computation", default=10)
-    parser.add_argument("--aug", help="number of augmentations per original image", default=0)
-    parser.add_argument("--shp", help="output shape of 2D inputs", default=224)
-    parser.add_argument("--chn", help="number of channels to use", default=1)
+    parser.add_argument("--min", help="minimum age to include", default=20, type=int)
+    parser.add_argument("--max", help="maximum age to include", default=85, type=int)
+    parser.add_argument("--jbs", help="parallel jobs", default=10, type=int)
+    parser.add_argument("--thk", help="number of layers for MIP-computation", default=10, type=int)
+    parser.add_argument("--aug", help="number of augmentations per original image", default=0, type=int)
+    parser.add_argument("--shp", help="output shape of 2D inputs", default=224, type=int)
+    parser.add_argument("--chn", help="number of channels to use", default=1, type=int)
     parser.add_argument("--sav", help="save images of inputs", default=False)
 
     arguments = parser.parse_args()
