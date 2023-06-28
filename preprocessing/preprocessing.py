@@ -235,7 +235,7 @@ def run_preprocessing(work_dir, info_file, h5_file, min_age, max_age,
                       thickness, jobs, augment, channels, shape, save):
     """Run the preprocessing"""
 
-    df = pd.read_csv(work_dir / info_file)
+    df = pd.read_csv(info_file)
 
     dirs_to_draw = get_dirs(work_dir=work_dir, df=df, min_age=min_age, max_age=max_age)
 
@@ -256,7 +256,7 @@ def run_preprocessing(work_dir, info_file, h5_file, min_age, max_age,
         img_dir = Path("./images/")
         img_dir.mkdir(exist_ok=True)
 
-    for chunk in k_chunks:
+    for chunk in k_chunks[0:1]:
         chunk_i = chunk_i + 1
         print("chunk " + str(chunk_i) + " of " + str(num_chunks + 1))
         results = Parallel(n_jobs=min(jobs, len(chunk)))(delayed(proc)(tpl=tpl, df=df, thickness=thickness)
