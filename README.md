@@ -7,4 +7,5 @@ Aging is an important risk factor for disease, leading to morphological change t
 A pre-trained ResNet-18 model was modified to predict chronological age as well as to quantify its aleatoric uncertainty. Generalization performance was assessed on a publicly available test dataset consisting of thorax-abdomen CT-scans of 421 subjects. Score-CAM saliency maps were generated for interpretation of model outputs and to identify hallmarks of aging.
 
 The model and its weights are available in this project as well as the used Score-CAM-implementation and preprocessing suite.
+
 ![saliency](https://github.com/BjarneKerber/age_estimation/blob/main/images/scorecam.png "Score-CAM saliency maps")
