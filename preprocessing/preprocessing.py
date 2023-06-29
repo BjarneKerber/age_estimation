@@ -169,13 +169,21 @@ def chunky(lst, n):
         yield so_chunky
 
 
-def visualize(comb_arr, pat_hash, age):
+def visualize(comb_arr, pat_hash, age, augment):
     # save visualization
     img_dir = Path("./images")
-    fig, ax = plt.subplots()
-    fig.suptitle(pat_hash)
-    ax.set_title("MIP " + str(age) + "y")
-    ax.imshow(np.rot90(comb_arr[0, 0, :, :]), cmap="bone", vmin=0, vmax=1)
+    if augment >=2:
+        fig, ax = plt.subplots(1, 2)
+        fig.suptitle(pat_hash)
+        ax[0].set_title("MIP " + str(age) + "y")
+        ax[0].imshow(np.rot90(comb_arr[0, 0, :, :]), cmap="bone", vmin=0, vmax=1)
+        ax[1].imshow(np.rot90(comb_arr[1, 0, :, :]), cmap="bone", vmin=0, vmax=1)
+    else:
+        fig, ax = plt.subplots()
+        fig.suptitle(pat_hash)
+        ax.set_title("MIP " + str(age) + "y")
+        ax.imshow(np.rot90(comb_arr[0, 0, :, :]), cmap="bone", vmin=0, vmax=1)
+
     out_file_name = pat_hash + ".png"
     out_file = img_dir / out_file_name
     plt.savefig(out_file, bbox_inches="tight")
@@ -242,7 +250,7 @@ def run_preprocessing(work_dir, info_file, h5_file, min_age, max_age,
     work_dir = Path(work_dir)
     df = pd.read_csv(info_file)
 
-    dirs_to_draw = get_dirs(work_dir=work_dir, df=df, min_age=min_age, max_age=max_age)[:10]
+    dirs_to_draw = get_dirs(work_dir=work_dir, df=df, min_age=min_age, max_age=max_age)#[:10]
 
     dir_nums = np.arange(0, len(dirs_to_draw))
     i_dirs = list(zip(dir_nums, dirs_to_draw))
@@ -274,7 +282,7 @@ def run_preprocessing(work_dir, info_file, h5_file, min_age, max_age,
                 info_dict["age"].append(result[3])
 
                 if save:
-                    visualize(result[1], result[2], result[3])
+                    visualize(result[1], result[2], result[3], augment=augment)
 
             else:
                 error_dict["layer"].append(result[0])
